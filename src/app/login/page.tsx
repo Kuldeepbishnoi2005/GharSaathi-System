@@ -1,15 +1,27 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { ShieldCheck, Mail, Lock, ArrowRight, Sparkles, AlertTriangle } from 'lucide-react';
 
 import { validateEmail, validatePassword } from '@/lib/utils/validation';
 import { sanitizeErrorMessage } from '@/lib/utils/errorHandling';
 
-export default function LoginPage() {
+function LoginFallback() {
+  return (
+    <div className="min-h-[85vh] flex flex-col items-center justify-center py-6 text-[#717975]">
+      <div className="w-10 h-10 rounded-2xl bg-[#183C32] text-[#DDEFE5] flex items-center justify-center mb-3 animate-pulse">
+        <ShieldCheck className="w-6 h-6" />
+      </div>
+      <p className="text-xs font-semibold">Loading GharSaathi Login...</p>
+    </div>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, signInWithEmail, signUpWithEmail, loading: authLoading } = useAuth();
 
   const [mounted, setMounted] = useState(false);
@@ -24,7 +36,10 @@ export default function LoginPage() {
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    if (searchParams && searchParams.get('mode') === 'signup') {
+      setIsSignUp(true);
+    }
+  }, [searchParams]);
 
   // Handle countdown timer for rate limiting
   useEffect(() => {
@@ -129,14 +144,7 @@ export default function LoginPage() {
   };
 
   if (!mounted) {
-    return (
-      <div className="min-h-[85vh] flex flex-col items-center justify-center py-6 text-[#717975]">
-        <div className="w-10 h-10 rounded-2xl bg-[#183C32] text-[#DDEFE5] flex items-center justify-center mb-3 animate-pulse">
-          <ShieldCheck className="w-6 h-6" />
-        </div>
-        <p className="text-xs font-semibold">Loading GharSaathi Login...</p>
-      </div>
-    );
+    return <LoginFallback />;
   }
 
   return (
@@ -270,3 +278,12 @@ export default function LoginPage() {
     </div>
   );
 }
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
