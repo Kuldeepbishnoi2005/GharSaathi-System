@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: #f9f9f7;
+    --foreground: #1a1c1b;
+
+    --card: #ffffff;
+    --card-foreground: #1a1c1b;
+
+    --popover: #ffffff;
+    --popover-foreground: #1a1c1b;
+
+    --primary: #00261d;
+    --primary-container: #183c32;
+    --primary-foreground: #ffffff;
+
+    --secondary: #52625a;
+    --secondary-container: #ddefe5;
+    --secondary-foreground: #183c32;
+
+    --muted: #f4f4f1;
+    --muted-foreground: #717975;
+
+    --accent: #ddefe5;
+    --accent-foreground: #00261d;
+
+    --destructive: #ba1a1a;
+    --destructive-foreground: #ffffff;
+
+    --border: #e2e3e0;
+    --input: #e2e3e0;
+    --ring: #183c32;
+
+    --radius-hero: 24px;
+    --radius-card: 16px;
+    --radius-btn: 12px;
+  }
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  min-height: 100vh;
+  overscroll-behavior-y: none;
+}
+
+/* Custom Soft Ambient Shadow matching Stitch Design */
+.shadow-stitch {
+  box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+.shadow-stitch-lg {
+  box-shadow: 0px 12px 36px rgba(0, 0, 0, 0.08);
+}
+
+.shadow-card-glow {
+  box-shadow: 0px 16px 40px -10px rgba(24, 60, 50, 0.25);
+}
+
+.shadow-emerald-glow {
+  box-shadow: 0px 8px 24px -4px rgba(213, 243, 226, 0.6);
+}
+
+/* Custom Financial Display Typography */
+.font-financial {
+  font-size: 2.25rem;
+  line-height: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+/* Premium Card Gradients */
+.bg-gradient-forest {
+  background: linear-gradient(135deg, #183C32 0%, #0D2821 55%, #051814 100%);
+}
+
+.bg-gradient-emerald-dark {
+  background: linear-gradient(135deg, #183C32 0%, #00261D 100%);
+}
+
+.bg-gradient-sage {
+  background: linear-gradient(135deg, #DDEFE5 0%, #CBE6D7 100%);
+}
+
+.bg-gradient-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Glassmorphism Bottom Nav & Top Bar */
+.glass-nav {
+  background: rgba(249, 249, 247, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Hide scrollbar for mobile horizontal scroll carousels */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Animations */
+@keyframes sheet-slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-sheet-up {
+  animation: sheet-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.15); }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+

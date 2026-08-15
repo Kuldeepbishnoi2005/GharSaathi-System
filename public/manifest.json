@@ -1,0 +1,24 @@
+{
+  "name": "GharSaathi - Household Staff & Attendance Tracker",
+  "short_name": "GharSaathi",
+  "description": "Track household helpers daily attendance and monthly salary payments easily",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F9F9F7",
+  "theme_color": "#183C32",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
