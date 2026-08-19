@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useData } from '@/context/DataContext';
 import { createClient } from '@/lib/supabase/client';
 import { Worker, HelperRole, DeductionMode, BillingType } from '@/lib/types';
 import { formatDateISO } from '@/lib/utils/calculations';
@@ -29,9 +30,7 @@ const ROLES: HelperRole[] = ['Cook', 'Maid', 'Milkman', 'Ironing', 'Driver', 'Ne
 export default function HelpersPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-
-  const [workers, setWorkers] = useState<Worker[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { workers, isInitialLoaded, refreshData, setWorkers } = useData();
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -79,61 +78,10 @@ export default function HelpersPage() {
     setBillingType(basis === 'attendance' ? 'salary' : 'per_unit_log');
   };
 
-  const fetchWorkers = async () => {
-    const supabase = createClient();
-    try {
-      const { data, error } = await supabase
-        .from('workers')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setWorkers(data || []);
-    } catch (err) {
-      console.error('Error fetching workers:', err);
-    }
-  };
-
   useEffect(() => {
-    let isSubscribed = true;
-
-    if (authLoading) return;
-
-    if (!user) {
-      setLoading(false);
+    if (!authLoading && !user) {
       router.replace('/login');
-      return;
     }
-
-    const supabase = createClient();
-
-    async function loadWorkers() {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('workers')
-          .select('*')
-          .order('name');
-
-        if (error) throw error;
-
-        if (isSubscribed) {
-          setWorkers(data || []);
-        }
-      } catch (err) {
-        console.error('Error fetching workers:', err);
-      } finally {
-        if (isSubscribed) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadWorkers();
-
-    return () => {
-      isSubscribed = false;
-    };
   }, [user, authLoading, router]);
 
   const openAddModal = () => {
@@ -293,7 +241,7 @@ export default function HelpersPage() {
       }
 
       setIsModalOpen(false);
-      await fetchWorkers();
+      await refreshData();
     } catch (err: any) {
       setErrorMsg(sanitizeErrorMessage(err, 'Failed to save staff member details.'));
     } finally {
@@ -311,7 +259,7 @@ export default function HelpersPage() {
       const { error } = await supabase.from('workers').delete().eq('id', workerId);
       if (error) throw error;
       setIsModalOpen(false);
-      await fetchWorkers();
+      await refreshData();
     } catch (err: any) {
       alert(sanitizeErrorMessage(err, 'Failed to delete worker details.'));
     }
@@ -333,11 +281,11 @@ export default function HelpersPage() {
       if (error) throw error;
     } catch (err) {
       console.error('Failed to update worker status:', err);
-      await fetchWorkers();
+      await refreshData();
     }
   };
 
-  if (authLoading || loading) {
+  if (authLoading || (!isInitialLoaded && workers.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-[#717975]">
         <RefreshCw className="w-8 h-8 animate-spin text-[#183C32] mb-2" />

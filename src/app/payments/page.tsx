@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useData } from '@/context/DataContext';
 import { createClient } from '@/lib/supabase/client';
 import {
   Worker,
@@ -38,19 +39,23 @@ import Link from 'next/link';
 export default function PaymentsPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const {
+    workers: allWorkers,
+    monthExceptions,
+    serviceLogs,
+    vacationPeriods,
+    payments,
+    isInitialLoaded,
+    setPayments,
+  } = useData();
+
+  const workers = allWorkers.filter((w) => w.is_active);
 
   const [currentMonthDate, setCurrentMonthDate] = useState(() => {
     const d = new Date();
     d.setDate(1);
     return d;
   });
-
-  const [workers, setWorkers] = useState<Worker[]>([]);
-  const [monthExceptions, setMonthExceptions] = useState<AttendanceException[]>([]);
-  const [serviceLogs, setServiceLogs] = useState<ServiceLog[]>([]);
-  const [vacationPeriods, setVacationPeriods] = useState<VacationPeriod[]>([]);
-  const [payments, setPayments] = useState<PaymentRecord[]>([]);
-  const [loading, setLoading] = useState(true);
 
   // Custom Payout Modal state
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
@@ -74,79 +79,10 @@ export default function PaymentsPage() {
   const totalDaysInSelectedMonth = getDaysInMonth(targetYear, targetMonthIndex);
 
   useEffect(() => {
-    let isSubscribed = true;
-
-    if (authLoading) return;
-
-    if (!user) {
-      setLoading(false);
+    if (!authLoading && !user) {
       router.replace('/login');
-      return;
     }
-
-    const supabase = createClient();
-
-    async function fetchPaymentsData() {
-      try {
-        setLoading(true);
-        // Fetch active workers
-        const { data: wData, error: wErr } = await supabase
-          .from('workers')
-          .select('*')
-          .eq('is_active', true)
-          .order('name');
-
-        if (wErr) console.error('Error fetching workers:', wErr);
-
-        // Fetch month's attendance exceptions
-        const { data: exData, error: eErr } = await supabase
-          .from('attendance_exceptions')
-          .select('*')
-          .gte('date', startDate)
-          .lte('date', endDate);
-
-        if (eErr) console.error('Error fetching exceptions:', eErr);
-
-        // Fetch service logs for month
-        const { data: slData } = await supabase
-          .from('service_logs')
-          .select('*')
-          .gte('date', startDate)
-          .lte('date', endDate);
-
-        // Fetch vacation periods
-        const { data: vpData } = await supabase.from('vacation_periods').select('*');
-
-        // Fetch payment records for this month
-        const { data: pData, error: pErr } = await supabase
-          .from('payments')
-          .select('*')
-          .eq('month', monthYearStr);
-
-        if (pErr) console.error('Error fetching payments:', pErr);
-
-        if (isSubscribed) {
-          setWorkers(wData || []);
-          setMonthExceptions(exData || []);
-          setServiceLogs(slData || []);
-          setVacationPeriods(vpData || []);
-          setPayments(pData || []);
-        }
-      } catch (err) {
-        console.error('Error fetching payments data:', err);
-      } finally {
-        if (isSubscribed) {
-          setLoading(false);
-        }
-      }
-    }
-
-    fetchPaymentsData();
-
-    return () => {
-      isSubscribed = false;
-    };
-  }, [user, authLoading, startDate, endDate, monthYearStr, router]);
+  }, [user, authLoading, router]);
 
   const changeMonth = (delta: number) => {
     // If trying to navigate into future month, block it
@@ -221,7 +157,7 @@ export default function PaymentsPage() {
     }
   };
 
-  if (authLoading || loading) {
+  if (authLoading || (!isInitialLoaded && allWorkers.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-[#717975]">
         <RefreshCw className="w-8 h-8 animate-spin text-[#183C32] mb-2" />

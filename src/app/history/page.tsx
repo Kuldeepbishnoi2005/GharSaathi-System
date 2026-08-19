@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useData } from '@/context/DataContext';
 import { createClient } from '@/lib/supabase/client';
 import { Worker, AttendanceException, VacationPeriod } from '@/lib/types';
 import { formatDateISO } from '@/lib/utils/calculations';
@@ -27,15 +28,23 @@ import {
 export default function HistoryPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const {
+    workers: allWorkers,
+    monthExceptions,
+    vacationPeriods,
+    isInitialLoaded,
+    setMonthExceptions,
+    setVacationPeriods,
+    refreshData,
+  } = useData();
+
+  const workers = allWorkers.filter((w) => w.is_active);
 
   const todayStr = formatDateISO(new Date());
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [activeTab, setActiveTab] = useState<'attendance' | 'vacations'>('attendance');
 
-  const [workers, setWorkers] = useState<Worker[]>([]);
-  const [exceptionsForDate, setExceptionsForDate] = useState<AttendanceException[]>([]);
-  const [vacationPeriods, setVacationPeriods] = useState<VacationPeriod[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dateExceptions, setDateExceptions] = useState<AttendanceException[]>([]);
   const [togglingWorkerId, setTogglingWorkerId] = useState<string | null>(null);
 
   // Note editing state
@@ -49,67 +58,34 @@ export default function HistoryPage() {
   const [vacationNote, setVacationNote] = useState('');
   const [isSubmittingVacation, setIsSubmittingVacation] = useState(false);
 
+  // Fetch exceptions for selectedDate if not in monthExceptions
   useEffect(() => {
-    let isSubscribed = true;
-
-    if (authLoading) return;
-
-    if (!user) {
-      setLoading(false);
+    if (!authLoading && !user) {
       router.replace('/login');
       return;
     }
 
     const supabase = createClient();
+    async function loadDateExceptions() {
+      // Check if selectedDate is already in monthExceptions
+      const cached = monthExceptions.filter((ex) => ex.date === selectedDate);
+      setDateExceptions(cached);
 
-    async function fetchHistoryData() {
-      try {
-        setLoading(true);
-        // Fetch active workers
-        const { data: wData, error: wErr } = await supabase
-          .from('workers')
-          .select('*')
-          .eq('is_active', true)
-          .order('name');
-
-        if (wErr) console.error('Error fetching workers:', wErr);
-
-        // Fetch exceptions for selected date
-        const { data: exData, error: eErr } = await supabase
-          .from('attendance_exceptions')
-          .select('*')
-          .eq('date', selectedDate);
-
-        if (eErr) console.error('Error fetching exceptions:', eErr);
-
-        // Fetch all vacation periods
-        const { data: vpData, error: vpErr } = await supabase
-          .from('vacation_periods')
-          .select('*')
-          .order('start_date', { ascending: false });
-
-        if (vpErr) console.error('Error fetching vacation periods:', vpErr);
-
-        if (isSubscribed) {
-          setWorkers(wData || []);
-          setExceptionsForDate(exData || []);
-          setVacationPeriods(vpData || []);
-        }
-      } catch (err) {
-        console.error('Error fetching history data:', err);
-      } finally {
-        if (isSubscribed) {
-          setLoading(false);
-        }
+      // If selectedDate is not cached in current month, fetch directly
+      const { data } = await supabase
+        .from('attendance_exceptions')
+        .select('*')
+        .eq('date', selectedDate);
+      if (data) {
+        setDateExceptions(data);
       }
     }
 
-    fetchHistoryData();
+    loadDateExceptions();
+  }, [user, authLoading, selectedDate, monthExceptions, router]);
 
-    return () => {
-      isSubscribed = false;
-    };
-  }, [user, authLoading, selectedDate, router]);
+  // Derived exceptions list for view
+  const exceptionsForDate = dateExceptions;
 
   // Backdating toggle logic
   const toggleAttendanceOnDate = async (workerId: string) => {
@@ -122,7 +98,8 @@ export default function HistoryPage() {
 
     if (existingEx) {
       // Mark Present -> Delete exception
-      setExceptionsForDate((prev) => prev.filter((ex) => ex.worker_id !== workerId));
+      setDateExceptions((prev: AttendanceException[]) => prev.filter((ex) => ex.worker_id !== workerId));
+      setMonthExceptions((prev: AttendanceException[]) => prev.filter((ex) => ex.id !== existingEx.id));
       const { error } = await supabase
         .from('attendance_exceptions')
         .delete()
@@ -130,7 +107,8 @@ export default function HistoryPage() {
 
       if (error) {
         console.error('Failed to update past attendance:', error);
-        setExceptionsForDate((prev) => [...prev, existingEx]);
+        setDateExceptions((prev: AttendanceException[]) => [...prev, existingEx]);
+        setMonthExceptions((prev: AttendanceException[]) => [...prev, existingEx]);
       }
     } else {
       // Mark Absent -> Insert exception for selectedDate
@@ -142,7 +120,8 @@ export default function HistoryPage() {
         status: 'absent',
       };
 
-      setExceptionsForDate((prev) => [...prev, newEx]);
+      setDateExceptions((prev: AttendanceException[]) => [...prev, newEx]);
+      setMonthExceptions((prev: AttendanceException[]) => [...prev, newEx]);
 
       const { data, error } = await supabase
         .from('attendance_exceptions')
@@ -156,9 +135,13 @@ export default function HistoryPage() {
 
       if (error) {
         console.error('Failed to insert past attendance exception:', error);
-        setExceptionsForDate((prev) => prev.filter((ex) => ex.id !== tempId));
+        setDateExceptions((prev: AttendanceException[]) => prev.filter((ex) => ex.id !== tempId));
+        setMonthExceptions((prev: AttendanceException[]) => prev.filter((ex) => ex.id !== tempId));
       } else if (data) {
-        setExceptionsForDate((prev) =>
+        setDateExceptions((prev: AttendanceException[]) =>
+          prev.map((ex) => (ex.id === tempId ? (data as AttendanceException) : ex))
+        );
+        setMonthExceptions((prev: AttendanceException[]) =>
           prev.map((ex) => (ex.id === tempId ? (data as AttendanceException) : ex))
         );
       }
@@ -186,7 +169,10 @@ export default function HistoryPage() {
         .eq('id', existingEx.id);
 
       if (error) throw error;
-      setExceptionsForDate((prev) =>
+      setDateExceptions((prev: AttendanceException[]) =>
+        prev.map((ex) => (ex.id === existingEx.id ? { ...ex, note: noteText.trim() } : ex))
+      );
+      setMonthExceptions((prev: AttendanceException[]) =>
         prev.map((ex) => (ex.id === existingEx.id ? { ...ex, note: noteText.trim() } : ex))
       );
       setNoteWorkerId(null);
@@ -281,7 +267,7 @@ export default function HistoryPage() {
     (vp) => selectedDate >= vp.start_date && selectedDate <= vp.end_date
   );
 
-  if (authLoading || loading) {
+  if (authLoading || (!isInitialLoaded && allWorkers.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-[#717975]">
         <RefreshCw className="w-8 h-8 animate-spin text-[#183C32] mb-2" />

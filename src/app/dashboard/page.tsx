@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useData } from '@/context/DataContext';
 import { createClient } from '@/lib/supabase/client';
 import { Worker, AttendanceException, VacationPeriod, ServiceLog, PaymentRecord } from '@/lib/types';
 import { formatDateISO, getMonthDateRange, calculateWorkerPayable } from '@/lib/utils/calculations';
@@ -30,13 +31,21 @@ import Link from 'next/link';
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const {
+    workers: allWorkers,
+    monthExceptions,
+    vacationPeriods,
+    serviceLogs: monthLogs,
+    payments,
+    isInitialLoaded,
+    setMonthExceptions,
+    setVacationPeriods,
+    setServiceLogs: setMonthLogs,
+  } = useData();
 
-  const [workers, setWorkers] = useState<Worker[]>([]);
-  const [monthExceptions, setMonthExceptions] = useState<AttendanceException[]>([]);
-  const [vacationPeriods, setVacationPeriods] = useState<VacationPeriod[]>([]);
-  const [monthLogs, setMonthLogs] = useState<ServiceLog[]>([]);
-  const [payments, setPayments] = useState<PaymentRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Filter active workers for dashboard
+  const workers = allWorkers.filter((w: Worker) => w.is_active);
+
   const [togglingWorkerId, setTogglingWorkerId] = useState<string | null>(null);
 
   // Vacation Modal State
@@ -60,95 +69,20 @@ export default function DashboardPage() {
   const todayStr = formatDateISO(now);
   const currentYear = now.getFullYear();
   const currentMonthIndex = now.getMonth();
-  const { startDate: monthStartDate, endDate: monthEndDate } = getMonthDateRange(now);
-  const monthStr = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
 
   useEffect(() => {
-    let isSubscribed = true;
-
-    if (authLoading) return;
-
-    if (!user) {
-      setLoading(false);
+    if (!authLoading && !user) {
       router.replace('/login');
-      return;
     }
-
-    const supabase = createClient();
-
-    async function loadDashboardData() {
-      try {
-        setLoading(true);
-        // 1. Fetch active workers
-        const { data: workersData, error: wErr } = await supabase
-          .from('workers')
-          .select('*')
-          .eq('is_active', true)
-          .order('name');
-
-        if (wErr) console.error('Workers error:', wErr);
-
-        // 2. Fetch full month's attendance exceptions for accurate daily rate deduction sync
-        const { data: exData, error: eErr } = await supabase
-          .from('attendance_exceptions')
-          .select('*')
-          .gte('date', monthStartDate)
-          .lte('date', monthEndDate);
-
-        if (eErr) console.error('Exceptions error:', eErr);
-
-        // 3. Fetch vacation periods
-        const { data: vpData, error: vpErr } = await supabase.from('vacation_periods').select('*');
-
-        if (vpErr) console.error('Vacation periods error:', vpErr);
-
-        // 4. Fetch full month's service logs for ironing / per-unit payout sync
-        const { data: slData, error: slErr } = await supabase
-          .from('service_logs')
-          .select('*')
-          .gte('date', monthStartDate)
-          .lte('date', monthEndDate);
-
-        if (slErr) console.error('Service logs error:', slErr);
-
-        // 5. Fetch payment records for current month
-        const { data: pData, error: pErr } = await supabase
-          .from('payment_records')
-          .select('*')
-          .gte('month', monthStr);
-
-        if (pErr) console.error('Payment records error:', pErr);
-
-        if (isSubscribed) {
-          setWorkers(workersData || []);
-          setMonthExceptions(exData || []);
-          setVacationPeriods(vpData || []);
-          setMonthLogs(slData || []);
-          setPayments(pData || []);
-        }
-      } catch (err) {
-        console.error('Error fetching dashboard data:', err);
-      } finally {
-        if (isSubscribed) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadDashboardData();
-
-    return () => {
-      isSubscribed = false;
-    };
-  }, [user, authLoading, todayStr, monthStartDate, monthEndDate, monthStr, router]);
+  }, [user, authLoading, router]);
 
   // Derived today exceptions & logs
-  const todayExceptions = monthExceptions.filter((ex) => ex.date === todayStr);
-  const todayLogs = monthLogs.filter((l) => l.date === todayStr);
+  const todayExceptions = monthExceptions.filter((ex: AttendanceException) => ex.date === todayStr);
+  const todayLogs = monthLogs.filter((l: ServiceLog) => l.date === todayStr);
 
   // Check if today is in an active vacation period
   const activeVacationToday = vacationPeriods.find(
-    (vp) => todayStr >= vp.start_date && todayStr <= vp.end_date
+    (vp: VacationPeriod) => todayStr >= vp.start_date && todayStr <= vp.end_date
   );
 
   // Toggle attendance for attendance-based roles
@@ -157,11 +91,11 @@ export default function DashboardPage() {
     setTogglingWorkerId(workerId);
 
     const supabase = createClient();
-    const existingException = todayExceptions.find((ex) => ex.worker_id === workerId);
+    const existingException = todayExceptions.find((ex: AttendanceException) => ex.worker_id === workerId);
 
     if (existingException) {
       // Currently Absent -> Mark Present
-      setMonthExceptions((prev) => prev.filter((ex) => ex.id !== existingException.id));
+      setMonthExceptions((prev: AttendanceException[]) => prev.filter((ex: AttendanceException) => ex.id !== existingException.id));
 
       const { error } = await supabase
         .from('attendance_exceptions')
@@ -170,7 +104,7 @@ export default function DashboardPage() {
 
       if (error) {
         console.error('Failed to mark present:', error);
-        setMonthExceptions((prev) => [...prev, existingException]);
+        setMonthExceptions((prev: AttendanceException[]) => [...prev, existingException]);
       }
     } else {
       // Currently Present -> Mark Absent
@@ -182,7 +116,7 @@ export default function DashboardPage() {
         status: 'absent',
       };
 
-      setMonthExceptions((prev) => [...prev, newException]);
+      setMonthExceptions((prev: AttendanceException[]) => [...prev, newException]);
 
       const { data, error } = await supabase
         .from('attendance_exceptions')
@@ -196,10 +130,10 @@ export default function DashboardPage() {
 
       if (error) {
         console.error('Failed to mark absent:', error);
-        setMonthExceptions((prev) => prev.filter((ex) => ex.id !== tempId));
+        setMonthExceptions((prev: AttendanceException[]) => prev.filter((ex: AttendanceException) => ex.id !== tempId));
       } else if (data) {
-        setMonthExceptions((prev) =>
-          prev.map((ex) => (ex.id === tempId ? (data as AttendanceException) : ex))
+        setMonthExceptions((prev: AttendanceException[]) =>
+          prev.map((ex: AttendanceException) => (ex.id === tempId ? (data as AttendanceException) : ex))
         );
       }
     }
@@ -240,7 +174,7 @@ export default function DashboardPage() {
 
       if (error) throw error;
       if (data) {
-        setVacationPeriods((prev) => [...prev, data as VacationPeriod]);
+        setVacationPeriods((prev: VacationPeriod[]) => [...prev, data as VacationPeriod]);
       }
 
       setIsVacationModalOpen(false);
@@ -259,7 +193,7 @@ export default function DashboardPage() {
     try {
       const { error } = await supabase.from('vacation_periods').delete().eq('id', vpId);
       if (error) throw error;
-      setVacationPeriods((prev) => prev.filter((vp) => vp.id !== vpId));
+      setVacationPeriods((prev: VacationPeriod[]) => prev.filter((vp: VacationPeriod) => vp.id !== vpId));
     } catch (err: any) {
       alert(sanitizeErrorMessage(err, 'Failed to delete vacation period. Please try again.'));
     }
@@ -305,7 +239,7 @@ export default function DashboardPage() {
       if (error) throw error;
 
       if (data) {
-        setMonthLogs((prev) => [data as ServiceLog, ...prev]);
+        setMonthLogs((prev: ServiceLog[]) => [data as ServiceLog, ...prev]);
       }
 
       setLogModalWorker(null);
@@ -318,12 +252,12 @@ export default function DashboardPage() {
     }
   };
 
-  const attendanceWorkers = workers.filter((w) => w.billing_type !== 'per_unit_log');
+  const attendanceWorkers = workers.filter((w: Worker) => w.billing_type !== 'per_unit_log');
   const absentCount = todayExceptions.length;
   const presentCount = Math.max(0, attendanceWorkers.length - absentCount);
 
   // Compute real-time calculated total monthly payout synced with days worked / absent / vacation
-  const totalCalculatedMonthlyPayout = workers.reduce((sum, worker) => {
+  const totalCalculatedMonthlyPayout = workers.reduce((sum: number, worker: Worker) => {
     const calc = calculateWorkerPayable({
       worker,
       targetYear: currentYear,
@@ -341,7 +275,7 @@ export default function DashboardPage() {
     year: 'numeric',
   });
 
-  if (loading || authLoading) {
+  if (authLoading || (!isInitialLoaded && allWorkers.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-[#717975]">
         <RefreshCw className="w-8 h-8 animate-spin text-[#183C32] mb-2" />
@@ -518,17 +452,17 @@ export default function DashboardPage() {
             </Link>
           </div>
         ) : (
-          workers.map((worker) => {
+          workers.map((worker: Worker) => {
             const roleName = worker.role === 'Other' ? worker.custom_role_name || 'Other' : worker.role;
             const bType = worker.billing_type || 'salary';
             const isUnitBased = bType === 'per_unit_log';
 
-            const isAbsent = todayExceptions.some((ex) => ex.worker_id === worker.id);
+            const isAbsent = todayExceptions.some((ex: AttendanceException) => ex.worker_id === worker.id);
             const isProcessing = togglingWorkerId === worker.id;
 
             // Compute today's unit log summary if ironing
-            const workerTodayLogs = todayLogs.filter((l) => l.worker_id === worker.id);
-            const todayUnitsCount = workerTodayLogs.reduce((sum, l) => sum + (Number(l.units) || 0), 0);
+            const workerTodayLogs = todayLogs.filter((l: ServiceLog) => l.worker_id === worker.id);
+            const todayUnitsCount = workerTodayLogs.reduce((sum: number, l: ServiceLog) => sum + (Number(l.units) || 0), 0);
 
             return (
               <div

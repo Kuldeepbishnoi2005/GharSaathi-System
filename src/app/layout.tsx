@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
+import { DataProvider } from '@/context/DataContext';
 import { Navigation } from '@/components/Navigation';
 import { PwaRegister } from '@/components/PwaRegister';
 
@@ -39,11 +40,13 @@ export default function RootLayout({
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="bg-[#EAEBE6] sm:bg-[#EAEBE6] text-[#1A1C1B] min-h-screen flex justify-center" suppressHydrationWarning>
         <AuthProvider>
-          <PwaRegister />
-          <div className="w-full max-w-md min-h-screen bg-[#F9F9F7] shadow-2xl relative flex flex-col sm:border-x sm:border-[#E2E3E0]">
-            <Navigation />
-            <main className="flex-1 pb-24">{children}</main>
-          </div>
+          <DataProvider>
+            <PwaRegister />
+            <div className="w-full max-w-md min-h-screen bg-[#F9F9F7] shadow-2xl relative flex flex-col sm:border-x sm:border-[#E2E3E0]">
+              <Navigation />
+              <main className="flex-1 pb-24">{children}</main>
+            </div>
+          </DataProvider>
         </AuthProvider>
       </body>
     </html>

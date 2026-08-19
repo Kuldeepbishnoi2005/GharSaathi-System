@@ -12,8 +12,6 @@ import {
   LogOut,
   Bell,
   ChevronLeft,
-  ShieldCheck,
-  Sparkles,
 } from 'lucide-react';
 
 export function Navigation() {
@@ -24,23 +22,16 @@ export function Navigation() {
     return null;
   }
 
-  // Greeting based on time of day
+  // Time-based greeting
   const currentHour = new Date().getHours();
   const greeting =
     currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening';
 
-  const userName = user.email ? user.email.split('@')[0] : 'User';
-  const initial = userName.charAt(0).toUpperCase();
-
-  // Page title mapping for mobile top bar
-  const getPageTitle = () => {
-    if (pathname === '/dashboard' || pathname === '/') return 'Home Overview';
-    if (pathname === '/helpers') return 'My Helpers';
-    if (pathname.startsWith('/helpers/')) return 'Helper Details';
-    if (pathname === '/history') return 'Attendance Ledger';
-    if (pathname === '/payments') return 'Payout Ledger';
-    return 'GharSaathi';
-  };
+  // Extract clean owner display name
+  const rawName = user.user_metadata?.full_name || (user.email ? user.email.split('@')[0] : 'Owner');
+  const ownerFirstName = rawName.split(' ')[0];
+  const formattedOwnerName = ownerFirstName.charAt(0).toUpperCase() + ownerFirstName.slice(1);
+  const initial = formattedOwnerName.charAt(0).toUpperCase();
 
   const isDetailPage = pathname.startsWith('/helpers/');
 
@@ -54,13 +45,13 @@ export function Navigation() {
   return (
     <>
       {/* Mobile Top App Bar */}
-      <header className="sticky top-0 z-40 bg-[#F9F9F7]/90 backdrop-blur-xl border-b border-[#E2E3E0] px-4 py-3 shadow-sm">
+      <header className="sticky top-0 z-40 bg-[#F9F9F7]/95 backdrop-blur-xl border-b border-[#E2E3E0] px-4 py-3 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             {isDetailPage ? (
               <Link
                 href="/helpers"
-                className="p-2 rounded-2xl bg-white border border-[#E2E3E0] text-[#183C32] hover:bg-[#DDEFE5] transition-all active:scale-95 shadow-sm flex items-center justify-center"
+                className="p-2.5 rounded-2xl bg-white border border-[#E2E3E0] text-[#183C32] hover:bg-[#DDEFE5] transition-all active:scale-95 shadow-sm flex items-center justify-center"
                 title="Back to Helpers"
               >
                 <ChevronLeft className="w-5 h-5" />
@@ -75,23 +66,21 @@ export function Navigation() {
             )}
 
             <div>
-              <div className="flex items-center space-x-1.5">
-                <p className="text-[11px] font-semibold text-[#717975] uppercase tracking-wider leading-none">
-                  {greeting}
-                </p>
-                <span className="w-1 h-1 rounded-full bg-[#183C32]/40" />
-                <span className="text-[11px] font-bold text-[#183C32] capitalize leading-none">{userName}</span>
-              </div>
-              <h1 className="font-black text-[#1A1C1B] text-lg tracking-tight leading-tight mt-0.5">
-                {getPageTitle()}
+              <h1 className="font-extrabold text-[#1A1C1B] text-base tracking-tight leading-snug flex items-center space-x-1">
+                <span>{greeting}, {formattedOwnerName}</span>
+                <span className="text-sm">👋</span>
               </h1>
+              <p className="text-[11px] font-semibold text-[#717975] tracking-wide flex items-center space-x-1.5 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                <span>GharSaathi Ledger</span>
+              </p>
             </div>
           </div>
 
           <div className="flex items-center space-x-1">
             <button
               type="button"
-              onClick={() => alert('All household data is up to date')}
+              onClick={() => alert('All household staff records are synced')}
               className="p-2.5 rounded-2xl text-[#52625A] hover:bg-[#EEEEEC] transition-all active:scale-95 relative"
               title="Notifications"
             >
@@ -124,6 +113,7 @@ export function Navigation() {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 className={`flex flex-col items-center py-1 px-3 rounded-2xl transition-all duration-200 active:scale-95 ${
                   isActive
                     ? 'text-[#183C32] font-black'
@@ -148,4 +138,3 @@ export function Navigation() {
     </>
   );
 }
-
