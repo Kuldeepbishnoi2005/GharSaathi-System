@@ -52,7 +52,7 @@ function LoginForm() {
 
   useEffect(() => {
     if (mounted && user && !authLoading) {
-      router.push('/');
+      router.push('/dashboard');
     }
   }, [user, authLoading, router, mounted]);
 
@@ -103,7 +103,7 @@ function LoginForm() {
           throw error;
         }
       }
-      router.push('/');
+      router.push('/dashboard');
     } catch (err: any) {
       setErrorMsg(sanitizeErrorMessage(err, 'Authentication failed. Please check your credentials and try again.'));
     } finally {
@@ -134,7 +134,7 @@ function LoginForm() {
           throw signUpRes.error;
         }
       }
-      router.push('/');
+      router.push('/dashboard');
     } catch (err: any) {
       setErrorMsg(sanitizeErrorMessage(err, 'Demo login failed. Please try again.'));
     } finally {

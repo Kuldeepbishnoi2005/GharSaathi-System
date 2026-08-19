@@ -20,7 +20,7 @@ export function Navigation() {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
 
-  if (!user || pathname === '/login' || pathname === '/' || pathname === '/landing') {
+  if (!user || pathname === '/login' || pathname === '/landing') {
     return null;
   }
 
@@ -34,7 +34,7 @@ export function Navigation() {
 
   // Page title mapping for mobile top bar
   const getPageTitle = () => {
-    if (pathname === '/dashboard') return 'Home Overview';
+    if (pathname === '/dashboard' || pathname === '/') return 'Home Overview';
     if (pathname === '/helpers') return 'My Helpers';
     if (pathname.startsWith('/helpers/')) return 'Helper Details';
     if (pathname === '/history') return 'Attendance Ledger';
@@ -116,7 +116,10 @@ export function Navigation() {
         <div className="flex items-center justify-around">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive =
+              item.href === '/dashboard'
+                ? pathname === '/dashboard' || pathname === '/'
+                : pathname === item.href;
             return (
               <Link
                 key={item.href}
