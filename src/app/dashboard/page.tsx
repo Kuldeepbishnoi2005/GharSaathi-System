@@ -4,10 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { createClient } from '@/lib/supabase/client';
-import { Worker, AttendanceException, VacationPeriod, ServiceLog } from '@/lib/types';
-import { formatDateISO } from '@/lib/utils/calculations';
+import { Worker, AttendanceException, VacationPeriod, ServiceLog, PaymentRecord } from '@/lib/types';
+import { formatDateISO, getMonthDateRange, calculateWorkerPayable } from '@/lib/utils/calculations';
 import { validateDateRange, validateNumericInput, validateNoteText } from '@/lib/utils/validation';
 import { sanitizeErrorMessage } from '@/lib/utils/errorHandling';
+import { InstallPwaBanner } from '@/components/InstallPwaBanner';
 import {
   CheckCircle2,
   XCircle,
@@ -21,7 +22,6 @@ import {
   Shirt,
   X,
   Sparkles,
-  TrendingDown,
   ChevronRight,
   ShieldCheck,
 } from 'lucide-react';
@@ -32,9 +32,10 @@ export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
 
   const [workers, setWorkers] = useState<Worker[]>([]);
-  const [todayExceptions, setTodayExceptions] = useState<AttendanceException[]>([]);
+  const [monthExceptions, setMonthExceptions] = useState<AttendanceException[]>([]);
   const [vacationPeriods, setVacationPeriods] = useState<VacationPeriod[]>([]);
-  const [todayLogs, setTodayLogs] = useState<ServiceLog[]>([]);
+  const [monthLogs, setMonthLogs] = useState<ServiceLog[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [togglingWorkerId, setTogglingWorkerId] = useState<string | null>(null);
 
@@ -55,7 +56,12 @@ export default function DashboardPage() {
   const [logNote, setLogNote] = useState('');
   const [isSubmittingLog, setIsSubmittingLog] = useState(false);
 
-  const todayStr = formatDateISO(new Date());
+  const now = new Date();
+  const todayStr = formatDateISO(now);
+  const currentYear = now.getFullYear();
+  const currentMonthIndex = now.getMonth();
+  const { startDate: monthStartDate, endDate: monthEndDate } = getMonthDateRange(now);
+  const monthStr = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
 
   useEffect(() => {
     let isSubscribed = true;
@@ -70,10 +76,10 @@ export default function DashboardPage() {
 
     const supabase = createClient();
 
-    async function loadTodayData() {
+    async function loadDashboardData() {
       try {
         setLoading(true);
-        // Fetch active workers
+        // 1. Fetch active workers
         const { data: workersData, error: wErr } = await supabase
           .from('workers')
           .select('*')
@@ -82,35 +88,46 @@ export default function DashboardPage() {
 
         if (wErr) console.error('Workers error:', wErr);
 
-        // Fetch today's exceptions
+        // 2. Fetch full month's attendance exceptions for accurate daily rate deduction sync
         const { data: exData, error: eErr } = await supabase
           .from('attendance_exceptions')
           .select('*')
-          .eq('date', todayStr);
+          .gte('date', monthStartDate)
+          .lte('date', monthEndDate);
 
         if (eErr) console.error('Exceptions error:', eErr);
 
-        // Fetch vacation periods
+        // 3. Fetch vacation periods
         const { data: vpData, error: vpErr } = await supabase.from('vacation_periods').select('*');
 
         if (vpErr) console.error('Vacation periods error:', vpErr);
 
-        // Fetch today's service logs
+        // 4. Fetch full month's service logs for ironing / per-unit payout sync
         const { data: slData, error: slErr } = await supabase
           .from('service_logs')
           .select('*')
-          .eq('date', todayStr);
+          .gte('date', monthStartDate)
+          .lte('date', monthEndDate);
 
         if (slErr) console.error('Service logs error:', slErr);
 
+        // 5. Fetch payment records for current month
+        const { data: pData, error: pErr } = await supabase
+          .from('payment_records')
+          .select('*')
+          .gte('month', monthStr);
+
+        if (pErr) console.error('Payment records error:', pErr);
+
         if (isSubscribed) {
           setWorkers(workersData || []);
-          setTodayExceptions(exData || []);
+          setMonthExceptions(exData || []);
           setVacationPeriods(vpData || []);
-          setTodayLogs(slData || []);
+          setMonthLogs(slData || []);
+          setPayments(pData || []);
         }
       } catch (err) {
-        console.error('Error fetching today attendance:', err);
+        console.error('Error fetching dashboard data:', err);
       } finally {
         if (isSubscribed) {
           setLoading(false);
@@ -118,12 +135,16 @@ export default function DashboardPage() {
       }
     }
 
-    loadTodayData();
+    loadDashboardData();
 
     return () => {
       isSubscribed = false;
     };
-  }, [user, authLoading, todayStr, router]);
+  }, [user, authLoading, todayStr, monthStartDate, monthEndDate, monthStr, router]);
+
+  // Derived today exceptions & logs
+  const todayExceptions = monthExceptions.filter((ex) => ex.date === todayStr);
+  const todayLogs = monthLogs.filter((l) => l.date === todayStr);
 
   // Check if today is in an active vacation period
   const activeVacationToday = vacationPeriods.find(
@@ -140,7 +161,7 @@ export default function DashboardPage() {
 
     if (existingException) {
       // Currently Absent -> Mark Present
-      setTodayExceptions((prev) => prev.filter((ex) => ex.worker_id !== workerId));
+      setMonthExceptions((prev) => prev.filter((ex) => ex.id !== existingException.id));
 
       const { error } = await supabase
         .from('attendance_exceptions')
@@ -149,7 +170,7 @@ export default function DashboardPage() {
 
       if (error) {
         console.error('Failed to mark present:', error);
-        setTodayExceptions((prev) => [...prev, existingException]);
+        setMonthExceptions((prev) => [...prev, existingException]);
       }
     } else {
       // Currently Present -> Mark Absent
@@ -161,7 +182,7 @@ export default function DashboardPage() {
         status: 'absent',
       };
 
-      setTodayExceptions((prev) => [...prev, newException]);
+      setMonthExceptions((prev) => [...prev, newException]);
 
       const { data, error } = await supabase
         .from('attendance_exceptions')
@@ -175,9 +196,9 @@ export default function DashboardPage() {
 
       if (error) {
         console.error('Failed to mark absent:', error);
-        setTodayExceptions((prev) => prev.filter((ex) => ex.id !== tempId));
+        setMonthExceptions((prev) => prev.filter((ex) => ex.id !== tempId));
       } else if (data) {
-        setTodayExceptions((prev) =>
+        setMonthExceptions((prev) =>
           prev.map((ex) => (ex.id === tempId ? (data as AttendanceException) : ex))
         );
       }
@@ -284,7 +305,7 @@ export default function DashboardPage() {
       if (error) throw error;
 
       if (data) {
-        setTodayLogs((prev) => [data as ServiceLog, ...prev]);
+        setMonthLogs((prev) => [data as ServiceLog, ...prev]);
       }
 
       setLogModalWorker(null);
@@ -301,13 +322,18 @@ export default function DashboardPage() {
   const absentCount = todayExceptions.length;
   const presentCount = Math.max(0, attendanceWorkers.length - absentCount);
 
-  // Compute estimated total monthly payout
-  const totalEstimatedMonthlyPayout = workers.reduce((sum, w) => {
-    if (w.billing_type === 'salary') return sum + (Number(w.monthly_salary) || 0);
-    if (w.billing_type === 'daily_rate') return sum + (Number(w.daily_rate) || 0) * 30;
-    if (w.billing_type === 'consumption') return sum + (Number(w.litres_per_day) || 0) * (Number(w.cost_per_litre) || 0) * 30;
-    if (w.billing_type === 'per_unit_log') return sum + (Number(w.cost_per_unit) || 0) * 40;
-    return sum;
+  // Compute real-time calculated total monthly payout synced with days worked / absent / vacation
+  const totalCalculatedMonthlyPayout = workers.reduce((sum, worker) => {
+    const calc = calculateWorkerPayable({
+      worker,
+      targetYear: currentYear,
+      targetMonthIndex: currentMonthIndex,
+      exceptions: monthExceptions,
+      serviceLogs: monthLogs,
+      vacationPeriods,
+      payments,
+    });
+    return sum + (calc.calculatedPayable || 0);
   }, 0);
 
   const formattedHeaderDate = new Date().toLocaleDateString('en-US', {
@@ -326,9 +352,12 @@ export default function DashboardPage() {
 
   return (
     <div className="px-4 pt-3 pb-24 space-y-6">
+      {/* 0. PWA App Install Banner */}
+      <InstallPwaBanner />
+
       {/* 1. Ultra-Premium Fintech Wallet Card ("Household Ledger") */}
       <div className="bg-gradient-forest text-white rounded-3xl p-6 shadow-card-glow relative overflow-hidden space-y-4 border border-[#183C32]/40">
-        {/* Subtle Ambient Glow */}
+        {/* Ambient Glow */}
         <div className="absolute top-0 right-0 w-48 h-48 bg-[#DDEFE5]/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-10 -left-10 w-36 h-36 bg-[#10B981]/10 rounded-full blur-2xl pointer-events-none" />
 
@@ -352,11 +381,11 @@ export default function DashboardPage() {
             Total Monthly Household Ledger
           </span>
           <div className="text-4xl font-black tracking-tight text-white mt-1 flex items-baseline space-x-1">
-            <span>₹{totalEstimatedMonthlyPayout.toLocaleString('en-IN')}</span>
+            <span>₹{totalCalculatedMonthlyPayout.toLocaleString('en-IN')}</span>
           </div>
           <p className="text-[11px] text-[#DDEFE5]/70 mt-1 font-medium flex items-center space-x-1">
             <ShieldCheck className="w-3.5 h-3.5 text-[#DDEFE5]" />
-            <span>Auto-Calculated across {workers.length} active helpers</span>
+            <span>Real-time synced across {workers.length} active helpers</span>
           </p>
         </div>
 
@@ -765,4 +794,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
