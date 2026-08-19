@@ -549,19 +549,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* 4. Smart Household Insights */}
-      <div className="bg-white rounded-3xl p-5 border border-[#E2E3E0] shadow-stitch space-y-3">
-        <div className="flex items-center space-x-2 text-[#183C32]">
-          <Sparkles className="w-4 h-4 text-[#183C32]" />
-          <h3 className="font-extrabold text-xs uppercase tracking-wider text-[#1A1C1B]">
-            Household Ledger Insights
-          </h3>
-        </div>
-        <p className="text-xs text-[#52625A] leading-relaxed font-medium">
-          All helper attendance is up to date for this month. Fixed salaries automatically deduct logged absent days at the daily rate.
-        </p>
-      </div>
-
       {/* VACATION MODE MODAL */}
       {isVacationModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">

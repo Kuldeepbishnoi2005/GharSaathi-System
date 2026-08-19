@@ -27,9 +27,16 @@ export function Navigation() {
   const greeting =
     currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening';
 
-  // Extract clean owner display name
-  const rawName = user.user_metadata?.full_name || (user.email ? user.email.split('@')[0] : 'Owner');
-  const ownerFirstName = rawName.split(' ')[0];
+  // Extract clean owner display name (prioritizing username/full_name over email)
+  const rawName =
+    user.user_metadata?.username ||
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    user.user_metadata?.display_name ||
+    (user.email ? user.email.split('@')[0] : 'User');
+
+  const cleanName = rawName.replace(/[._]/g, ' ');
+  const ownerFirstName = cleanName.split(' ')[0];
   const formattedOwnerName = ownerFirstName.charAt(0).toUpperCase() + ownerFirstName.slice(1);
   const initial = formattedOwnerName.charAt(0).toUpperCase();
 
@@ -66,14 +73,9 @@ export function Navigation() {
             )}
 
             <div>
-              <h1 className="font-extrabold text-[#1A1C1B] text-base tracking-tight leading-snug flex items-center space-x-1">
-                <span>{greeting}, {formattedOwnerName}</span>
-                <span className="text-sm">👋</span>
+              <h1 className="font-extrabold text-[#1A1C1B] text-base tracking-tight leading-snug">
+                {greeting}, {formattedOwnerName}
               </h1>
-              <p className="text-[11px] font-semibold text-[#717975] tracking-wide flex items-center space-x-1.5 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
-                <span>GharSaathi Ledger</span>
-              </p>
             </div>
           </div>
 
